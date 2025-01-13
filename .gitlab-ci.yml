@@ -1,0 +1,95 @@
+stages:
+  - build
+  - test
+  - package
+  - deploy_dev
+  - deploy_uat
+  - deploy_prod
+
+variables:
+  DOTNET_ROOT: "/usr/share/dotnet"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  ARTIFACT_NAME: "myapp.zip"
+  DEV_SERVER: "dev.iis.server"
+  UAT_SERVER: "uat.iis.server"
+  PROD_SERVER: "prod.iis.server"
+  DEPLOY_PATH: "C:\\inetpub\\wwwroot\\myapp"
+
+before_script:
+  - echo "Starting pipeline for multi-stage IIS deployment"
+
+build:
+  stage: build
+  script:
+    - echo "Building .NET application..."
+    - dotnet build MyApp.sln --configuration Release
+
+test:
+  stage: test
+  script:
+    - echo "Running unit tests..."
+    - dotnet test MyApp.sln --logger trx
+
+package:
+  stage: package
+  script:
+    - echo "Publishing application..."
+    - dotnet publish MyApp.sln --configuration Release --output publish/
+    - cd publish
+    - zip -r $ARTIFACT_NAME *
+  artifacts:
+    paths:
+      - publish/$ARTIFACT_NAME
+
+deploy_dev:
+  stage: deploy_dev
+  script:
+    - echo "Deploying to Dev IIS server..."
+    - |
+      pwsh -Command "
+      $Source = 'publish\\$ARTIFACT_NAME';
+      $Destination = '\\\\$DEV_SERVER\\$DEPLOY_PATH';
+      Copy-Item -Path $Source -Destination $Destination -Force;
+      Invoke-Command -ComputerName $DEV_SERVER -ScriptBlock {
+        Import-Module WebAdministration;
+        Restart-WebAppPool -Name 'MyAppPool';
+      }"
+  environment:
+    name: development
+    url: http://$DEV_SERVER/myapp
+
+deploy_uat:
+  stage: deploy_uat
+  script:
+    - echo "Deploying to UAT IIS server..."
+    - |
+      pwsh -Command "
+      $Source = 'publish\\$ARTIFACT_NAME';
+      $Destination = '\\\\$UAT_SERVER\\$DEPLOY_PATH';
+      Copy-Item -Path $Source -Destination $Destination -Force;
+      Invoke-Command -ComputerName $UAT_SERVER -ScriptBlock {
+        Import-Module WebAdministration;
+        Restart-WebAppPool -Name 'MyAppPool';
+      }"
+  environment:
+    name: uat
+    url: http://$UAT_SERVER/myapp
+  when: manual  # Requires manual approval for UAT
+
+deploy_prod:
+  stage: deploy_prod
+  script:
+    - echo "Deploying to Prod IIS server..."
+    - |
+      pwsh -Command "
+      $Source = 'publish\\$ARTIFACT_NAME';
+      $Destination = '\\\\$PROD_SERVER\\$DEPLOY_PATH';
+      Copy-Item -Path $Source -Destination $Destination -Force;
+      Invoke-Command -ComputerName $PROD_SERVER -ScriptBlock {
+        Import-Module WebAdministration;
+        Restart-WebAppPool -Name 'MyAppPool';
+      }"
+  environment:
+    name: production
+    url: http://$PROD_SERVER/myapp
+  when: manual  # Requires manual approval for Prod
