@@ -1,4 +1,4 @@
-@Library('welcome-message') _
+@Library('shared-libraries') _
 
 pipeline {
     agent any
