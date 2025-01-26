@@ -1,0 +1,21 @@
+@Library('welcome-message') _
+
+pipeline {
+    agent any
+    stages {
+        stage('Welcome') {
+            steps {
+                script {
+                    // Call the shared library function
+                    welcomeMessage('Narong')
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                echo "Starting the build process..."
+                // Additional build steps here
+            }
+        }
+    }
+}
